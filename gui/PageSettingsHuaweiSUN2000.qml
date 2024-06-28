@@ -7,7 +7,7 @@ MbPage {
 	property string settings: "com.victronenergy.settings/Settings/HuaweiSUN2000"
 
 	model: VisibleItemModel {
-                MbEditBoxIp {                                                    
+                MbEditBox {                                                    
                         id: modbusHost
                         description: qsTr("Modbus host IP")
                         item.bind: Utils.path(settings, "/ModbusHost")

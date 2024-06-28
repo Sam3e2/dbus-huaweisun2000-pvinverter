@@ -1,5 +1,7 @@
+import math
+
 from sun2000_modbus import inverter
-from sun2000_modbus import registers
+from sun2000_modbus import registers_alt as registers
 
 from dbus.mainloop.glib import DBusGMainLoop
 
@@ -68,8 +70,13 @@ class ModbusDataCollector2000Delux:
             s = v.get("sun2000")
             data[k] = self.invSun2000.read(s)
 
-        state1 = self.invSun2000.read(registers.InverterEquipmentRegister.State1)
-        state1_string = ";".join([val for key, val in state1Readable.items() if int(state1)&key>0])
+        # TODO: state is different implemented
+        state1 = self.invSun2000.read_formatted(registers.InverterEquipmentRegister.State1)
+        # Check if state is a string
+        if isinstance(state1, str):
+            state1_string = state1
+        else:
+            state1_string = ";".join([val for key, val in state1Readable.items() if int(state1)&key>0])
         data['/Status'] = state1_string
 
         # data['/Ac/StatusCode'] = statuscode
@@ -86,13 +93,14 @@ class ModbusDataCollector2000Delux:
         data['/Ac/L2/Frequency'] = freq
         data['/Ac/L3/Frequency'] = freq
 
+        k = math.sqrt(3) / 3
         cosphi = float(self.invSun2000.read((registers.InverterEquipmentRegister.PowerFactor)))
         data['/Ac/L1/Power'] = cosphi * float(data['/Ac/L1/Voltage']) * float(
-            data['/Ac/L1/Current']) * self.power_correction_factor
+            data['/Ac/L1/Current']) * k * self.power_correction_factor
         data['/Ac/L2/Power'] = cosphi * float(data['/Ac/L2/Voltage']) * float(
-            data['/Ac/L2/Current']) * self.power_correction_factor
+            data['/Ac/L2/Current']) * k * self.power_correction_factor
         data['/Ac/L3/Power'] = cosphi * float(data['/Ac/L3/Voltage']) * float(
-            data['/Ac/L3/Current']) * self.power_correction_factor
+            data['/Ac/L3/Current']) * k * self.power_correction_factor
 
         return data
 
@@ -105,13 +113,20 @@ class ModbusDataCollector2000Delux:
         try:
             data = {}
             data['SN'] = self.invSun2000.read(registers.InverterEquipmentRegister.SN)
-            data['ModelID'] = self.invSun2000.read(registers.InverterEquipmentRegister.ModelID)
-            data['Model'] = str(self.invSun2000.read_formatted(registers.InverterEquipmentRegister.Model)).replace('\0',
-                                                                                                                   '')
-            data['NumberOfPVStrings'] = self.invSun2000.read(registers.InverterEquipmentRegister.NumberOfPVStrings)
-            data['NumberOfMPPTrackers'] = self.invSun2000.read(registers.InverterEquipmentRegister.NumberOfMPPTrackers)
-            return data
 
+            # check if registers has modelID attribute
+            if hasattr(registers.InverterEquipmentRegister, 'ModelID'):
+                data['ModelID'] = self.invSun2000.read(registers.InverterEquipmentRegister.ModelID)
+                data['Model'] = str(self.invSun2000.read_formatted(registers.InverterEquipmentRegister.Model)).replace('\0',
+                                                                                                                    '')
+                data['NumberOfPVStrings'] = self.invSun2000.read(registers.InverterEquipmentRegister.NumberOfPVStrings)
+                data['NumberOfMPPTrackers'] = self.invSun2000.read(registers.InverterEquipmentRegister.NumberOfMPPTrackers)
+            else:
+                data['Model'] = 'SUN2000'
+                data['ModelID'] = 0
+                data['NumberOfPVStrings'] = 6
+                data['NumberOfMPPTrackers'] = 3
+            return data    
         except:
             print("Problem while getting static data modbus TCP")
             return None
