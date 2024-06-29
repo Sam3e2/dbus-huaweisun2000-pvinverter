@@ -72,7 +72,9 @@ class DbusSun2000Service:
         with self._dbusservice as s:
 
             try:
+                logging.info("start update")
                 meter_data = self._data_connector.getData()
+                logging.info("end update")
 
                 for k, v in meter_data.items():
                     logging.info(f"set {k} to {v}")
@@ -117,6 +119,13 @@ def main():
     logging.info(f"Settings: CustomName '{settings.get('custom_name')}', Position '{settings.get('position')}', UpdateTimeMS '{settings.get('update_time_ms')}'")
     logging.info(f"Settings: PowerCorrectionFactor '{settings.get('power_correction_factor')}'")
 
+
+    if len(sys.argv) > 1:
+        comport = sys.argv[1]
+        logging.info(f"Using port {comport}")
+    else:
+        comport = settings.get("modbus_host")
+
     while "255" in settings.get("modbus_host"):
         # This catches the initial setting and allows the service to be installed without configuring it first
         logging.warning(f"Please configure the modbus host and other settings in the VenusOS GUI (current setting: {settings.get('modbus_host')})")
@@ -124,18 +133,25 @@ def main():
         mainloop = GLib.MainLoop()
         mainloop.run()
 
-    modbus = ModbusDataCollector2000Delux(host = settings.get("modbus_host"),
+    modbus = ModbusDataCollector2000Delux(host = comport,
                                           port=settings.get("modbus_port"),
                                           modbus_unit=settings.get("modbus_unit"),
                                           power_correction_factor=settings.get("power_correction_factor"))
 
+    retries = 3
     while True:
         staticdata = modbus.getStaticData()
         if staticdata is None:
-            logging.error(f"Didn't receive static data from modbus, error is above. Sleeping 10 seconds before retrying.")
+            logging.error(f"Didn't receive static data from modbus, error is above. Sleeping 2 seconds before retrying.")
+            
+            if retries > 0:
+                retries -= 1
+            else:
+                sys.exit(1)
+            
             # Again we sleep in the mainloop in order to pick up config changes
             mainloop = GLib.MainLoop()
-            GLib.timeout_add(10000, exit_mainloop, mainloop)
+            GLib.timeout_add(2000, exit_mainloop, mainloop)
             mainloop.run()
             continue
         else:

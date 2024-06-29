@@ -1,30 +1,30 @@
 # dbus-huaweisun2000-pvinverter
 
-dbus driver for victron cerbo gx / venus os for huawei sun 2000 inverter
+dbus driver for victron cerbo gx / venus os for (old series) huawei sun 2000 inverter.
 
 ## Purpose
 
-This script is intended to help integrate a Huawei Sun 2000 inverter into the Venus OS and thus also into the VRM
-portal.
+This script is intended to help integrate a Huawei Sun 2000 inverter into the Venus OS and thus also into the VRM portal.
 
-I use a Cerbo GX, which I have integrated via Ethernet in the house network. I used the WiFi of the device to connect to
-the internal WiFi of the Huawei Sun 2000. Attention: No extra dongle is necessary! You can use the integrated Wifi,
-which is actually intended for configuration with the Huawei app (Fusion App or Sun2000 App). The advantage is that no
-additional hardware needs to be purchased and the inverter does not need to be connected to the Internet.
+The code is based on https://github.com/kcbam/dbus-huaweisun2000-pvinverter. That driver used the internal WiFi of the inverter. It seems, that older series doesn't have WiFi, so I rewrote the driver to support modbus RTU. 
 
-To further use the data, the mqtt broker from Venus OS can be used.
+The registers addresses are taken from https://www-file.huawei.com/~/media/CORPORATE/PDF/FusionSolar/HUAWEI_SUN2000_245KTL28KTL_MODBUS_Interface_Definitions_20150715_JP.pdf.
 
 ## Todo
 
-- [ ] better logging
-- [x] find out why the most values are missing in the view
-- [x] repair modelname (custom name in config)
-- [x] possibility to change settings via gui
+The code is working, but is not clean and doesn't support all features of the inverter.
+
 - [ ] alarm, state
 - [ ] more values: temperature, efficiency
 - [ ] clean code
 
-Cooming soon
+## Hardware prequisites
+
+- Venus OS device (e.g. Cerbo GX)
+- (old) Huawei Sun 2000 inverter with modbus RTU interface
+- USB to RS485 adapter
+
+I assume that newer series of Huawei Sun 2000 use a different register mapping. So this driver probably won't work with newer inverters.
 
 ## Installation
 
@@ -36,7 +36,7 @@ Cooming soon
 
    Easy way:
    ```
-   wget https://github.com/kcbam/dbus-huaweisun2000-pvinverter/archive/refs/heads/main.zip
+   wget https://github.com/Sam3e2/dbus-huaweisun2000-pvinverter/archive/refs/heads/main.zip
    unzip main.zip -d /data
    mv /data/dbus-huaweisun2000-pvinverter-main /data/dbus-huaweisun2000-pvinverter
    chmod a+x /data/dbus-huaweisun2000-pvinverter/install.sh
@@ -44,69 +44,47 @@ Cooming soon
    ```
 
 
-3. Edit the config.py file
+2. Edit the config.py file
 
    `nano /data/dbus-huaweisun2000-pvinverter/config.py`
 
-5. Check Modbus TCP Connection to gridinverter
+3. Check Modbus RTU Connection to gridinverter
 
-   `python /data/dbus-huaweisun2000-pvinverter/connector_modbus.py`
+   The driver can be tested standalone. To do this, disable serial-starter for the serial port you want to use. For example, to disable the serial port /dev/ttyUSB0, run the following commands:
 
-6. Run install.sh
+   ```
+   /opt/victronenergy/serial-starter/stop-tty.sh /dev/ttyUSB0
+   python /data/dbus-huaweisun2000-pvinverter/dbus-huaweisun2000-pvinverter.py
+   ```
+
+   To enable the serial port again, run:
+
+   ```
+   /opt/victronenergy/serial-starter/start-tty.sh /dev/ttyUSB0
+   ```
+
+4. Run install.sh
 
    `sh /data/dbus-huaweisun2000-pvinverter/install.sh`
 
 ### Debugging
 
-You can check the status of the service with svstat:
+If you have problems with the script, first try to run it standalone as described above. If the script runs without problems, but does not work as a service, check the serial starter log file:
 
-`svstat /service/dbus-huaweisun2000-pvinverter`
+`tail -F -n 100 /data/log/serial-starter/current | tai64nlocal`
 
-It will show something like this:
+If the service is started, you can check the log file:
 
-`/service/dbus-huaweisun2000-pvinverter: up (pid 10078) 325 seconds`
-
-If the number of seconds is always 0 or 1 or any other small number, it means that the service crashes and gets
-restarted all the time.
-
-When you think that the script crashes, start it directly from the command line:
-
-`python /data/dbus-huaweisun2000-pvinverter/dbus-huaweisun2000-pvinverter.py`
-
-Also useful:
-
-`tail -f /var/log/dbus-huaweisun2000/current | tai64nlocal`
-
-### Stop the script
-
-`svc -d /service/dbus-huaweisun2000-pvinverter`
-
-### Start the script
-
-`svc -u /service/dbus-huaweisun2000-pvinverter`
-
-
-### Restart the script
-
-If you want to restart the script, for example after changing it, just run the following command:
-
-`sh /data/dbus-huaweisun2000-pvinverter/restart.sh`
+`tail -F -n 100 /data/log/dbus-huaweisun2000.ttyUSB*/current | tai64nlocal`
 
 ## Uninstall the script
 
 Run
 
-   ```
+```
 sh /data/dbus-huaweisun2000-pvinverter/uninstall.sh
 rm -r /data/dbus-huaweisun2000-pvinverter/
-   ```
-
-# Examples
-
-![VRM-01](img/VRM-01.png)
-
-![VRM-02](img/VRM-02.png)
-
+```
 
 # Thank you
 ## Contributers
@@ -118,6 +96,8 @@ DenkBrettl
 modified verion of https://github.com/olivergregorius/sun2000_modbus
 
 ## this project is inspired by
+
+https://github.com/kcbam/dbus-huaweisun2000-pvinverter
 
 https://github.com/RalfZim/venus.dbus-fronius-smartmeter
 

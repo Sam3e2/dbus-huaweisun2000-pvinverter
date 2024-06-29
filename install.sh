@@ -4,6 +4,9 @@ echo "SCRIPT_DIR: $SCRIPT_DIR"
 SERVICE_NAME=$(basename $SCRIPT_DIR)
 echo "SERVICE_NAME: $SERVICE_NAME"
 # set permissions for script files
+chmod +x $SCRIPT_DIR/*.sh
+chmod +x $SCRIPT_DIR/*.py
+
 chmod a+x $SCRIPT_DIR/restart.sh
 chmod 744 $SCRIPT_DIR/restart.sh
 
@@ -15,8 +18,31 @@ chmod 755 $SCRIPT_DIR/service/run
 
 chmod a+x $SCRIPT_DIR/service/log/run
 
-# create sym-link to run script in deamon
-ln -sfn $SCRIPT_DIR/service /service/$SERVICE_NAME
+chmod a+x $SCRIPT_DIR/start.sh
+chmod 755 $SCRIPT_DIR/start.sh
+
+# create sym-link for serial starter
+ln -sn $SCRIPT_DIR /opt/victronenergy/dbus-huaweisun2000-pvinverter
+ln -sn $SCRIPT_DIR/service /opt/victronenergy/service-templates/dbus-huaweisun2000-pvinverter
+
+# add service to serial-starter
+# check if serial-starter.d was deleted
+serialstarter_path="/data/conf/serial-starter.d"
+serialstarter_file="$serialstarter_path/dbus-huaewaisun2000-pvinverter.conf"
+
+# check if folder exists
+if [ ! -d "$serialstarter_path" ]; then
+    mkdir "$serialstarter_path"
+fi
+
+# check if file exists
+if [ ! -f "$serialstarter_file" ]; then
+    {
+        echo "service pvinvsun dbus-huaweisun2000-pvinverter"
+        echo "alias default gps:vedirect:pvinvsun"
+        echo "alias rs485 cgwacs:fzsonick:imt:modbus:sbattery:pvinvsun"
+    } > "$serialstarter_file"
+fi
 
 # add install-script to rc.local to be ready for firmware update
 filename=/data/rc.local
