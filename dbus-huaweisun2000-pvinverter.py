@@ -27,8 +27,9 @@ from vedbus import VeDbusService
 
 
 class DbusSun2000Service:
-    def __init__(self, servicename, settings, paths, data_connector, serialnumber='X',
+    def __init__(self, mainloop, servicename, settings, paths, data_connector, serialnumber='X',
                  productname='Huawei Sun2000 PV-Inverter'):
+        self.mainloop = mainloop
         self._dbusservice = VeDbusService(servicename)
         # self._paths = paths
         self._data_connector = data_connector
@@ -88,6 +89,7 @@ class DbusSun2000Service:
 
             except Exception as e:
                 logging.critical('Error at %s', '_update', exc_info=e)
+                self.mainloop.quit()
 
         return True
 
@@ -99,6 +101,11 @@ def exit_mainloop(mainloop):
     mainloop.quit()
 
 def main():
+    if len(sys.argv) > 1:
+        comport = sys.argv[1]
+        logging.info(f"Using port {comport}")
+    else:
+        raise Exception("Please provide the comport as argument")
 
     # FIXME: This should be a proper private logger, instead of trying to configure the root logger,
     # which doesn't work unless force=True is specified and then leads to all sorts of libraries
@@ -120,25 +127,19 @@ def main():
     logging.info(f"Settings: PowerCorrectionFactor '{settings.get('power_correction_factor')}'")
 
 
-    if len(sys.argv) > 1:
-        comport = sys.argv[1]
-        logging.info(f"Using port {comport}")
-    else:
-        comport = settings.get("modbus_host")
-
-    while "255" in settings.get("modbus_host"):
+    #while "255" in settings.get("modbus_host"):
         # This catches the initial setting and allows the service to be installed without configuring it first
-        logging.warning(f"Please configure the modbus host and other settings in the VenusOS GUI (current setting: {settings.get('modbus_host')})")
+    #    logging.warning(f"Please configure the modbus host and other settings in the VenusOS GUI (current setting: {settings.get('modbus_host')})")
         # Running a mainloop means we'll be notified about config changes and exit in that case (which restarts the service)
-        mainloop = GLib.MainLoop()
-        mainloop.run()
+    #    mainloop = GLib.MainLoop()
+    #    mainloop.run()
 
     modbus = ModbusDataCollector2000Delux(host = comport,
                                           port=settings.get("modbus_port"),
                                           modbus_unit=settings.get("modbus_unit"),
                                           power_correction_factor=settings.get("power_correction_factor"))
 
-    retries = 3
+    retries = 0
     while True:
         staticdata = modbus.getStaticData()
         if staticdata is None:
@@ -147,7 +148,7 @@ def main():
             if retries > 0:
                 retries -= 1
             else:
-                sys.exit(1)
+                raise Exception("Failed to get static data from modbus")
             
             # Again we sleep in the mainloop in order to pick up config changes
             mainloop = GLib.MainLoop()
@@ -197,7 +198,9 @@ def main():
             '/Status': {'initial': ""},
         }
 
+        mainloop = GLib.MainLoop()
         pvac_output = DbusSun2000Service(
+            mainloop=mainloop,
             servicename='com.victronenergy.pvinverter.sun2000',
             settings=settings,
             paths=dbuspath,
@@ -207,11 +210,11 @@ def main():
         )
 
         logging.info('Connected to dbus, and switching over to GLib.MainLoop() (= event based)')
-        mainloop = GLib.MainLoop()
         mainloop.run()
     except Exception as e:
         logging.critical('Error at %s', 'main', exc_info=e)
 
+    logging.info('Exiting main')
 
 if __name__ == "__main__":
     main()
