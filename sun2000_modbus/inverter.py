@@ -6,16 +6,19 @@ from pymodbus.exceptions import ModbusIOException, ConnectionException
 
 from . import datatypes
 
-logging.basicConfig(level=logging.INFO)
-
+logging.basicConfig()
+logger = logging.getLogger("Sun2000")
+logger.setLevel(logging.INFO)
 
 class Sun2000:
     def __init__(self, host, port=502, timeout=0.1, wait=2, modbus_unit=1):
         self.wait = wait
         self.modbus_unit = modbus_unit
         if host.startswith('/dev/'):
-            self.inverter = ModbusSerialClient(method='rtu', strict=False, port=host, baudrate=19200, timeout=timeout, retries=3)
+            logger.info(f"Connecting to inverter via serial port {host}")
+            self.inverter = ModbusSerialClient(method='rtu', strict=False, port=host, baudrate=9600, timeout=timeout, retries=3)
         else:
+            logger.info(f"Connecting to inverter via TCP {host}:{port}")
             self.inverter = ModbusTcpClient(host, port, timeout=timeout)
 
     def connect(self):
@@ -23,10 +26,10 @@ class Sun2000:
             self.inverter.connect()
             time.sleep(self.wait)
             if self.isConnected():
-                logging.info('Successfully connected to inverter')
+                logger.info('Successfully connected to inverter')
                 return True
             else:
-                logging.error('Connection to inverter failed')
+                logger.error('Connection to inverter failed')
                 return False
         else:
             return True
@@ -50,10 +53,10 @@ class Sun2000:
             print(f"reading register {register.value.address} with quantity {register.value.quantity} from slave {self.modbus_unit}")
             register_value = self.inverter.read_holding_registers(register.value.address, register.value.quantity, unit=self.modbus_unit)
             if type(register_value) == ModbusIOException:
-                logging.error("Inverter modbus unit did not respond")
+                logger.error("Inverter modbus unit did not respond")
                 raise register_value
         except ConnectionException:
-            logging.error("A connection error occurred")
+            logger.error("A connection error occurred")
             raise
 
         return datatypes.decode(register_value.encode()[1:], register.value.data_type)
@@ -92,10 +95,10 @@ class Sun2000:
         try:
             register_range_value = self.inverter.read_holding_registers(start_address, quantity, unit=self.modbus_unit)
             if type(register_range_value) == ModbusIOException:
-                logging.error("Inverter modbus unit did not respond")
+                logger.error("Inverter modbus unit did not respond")
                 raise register_range_value
         except ConnectionException:
-            logging.error("A connection error occurred")
+            logger.error("A connection error occurred")
             raise
 
         return datatypes.decode(register_range_value.encode()[1:], datatypes.DataType.MULTIDATA)

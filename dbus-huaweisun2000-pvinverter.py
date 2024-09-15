@@ -25,6 +25,10 @@ from settings import HuaweiSUN2000Settings
 sys.path.insert(1, os.path.join(os.path.dirname(__file__), '/opt/victronenergy/dbus-systemcalc-py/ext/velib_python'))
 from vedbus import VeDbusService
 
+logging.basicConfig()
+logger = logging.getLogger("DbusSun2000Service")
+logger.info("Starting Huawei SUN2000 dbus service")
+logger.setLevel(logging.INFO)
 
 class DbusSun2000Service:
     def __init__(self, mainloop, servicename, settings, paths, data_connector, serialnumber='X',
@@ -34,7 +38,7 @@ class DbusSun2000Service:
         # self._paths = paths
         self._data_connector = data_connector
 
-        logging.debug("%s /DeviceInstance = %d" % (servicename, settings.get_vrm_instance()))
+        logger.debug("%s /DeviceInstance = %d" % (servicename, settings.get_vrm_instance()))
 
         # productname="Huawei Sun2000" #tmp please del
 
@@ -67,18 +71,19 @@ class DbusSun2000Service:
                 _path, _settings['initial'], gettextcallback=_settings.get('textformat', lambda p,v:v), writeable=True,
                 onchangecallback=self._handlechangedvalue)
 
+        self._max_retries = 2
+        self._retries = self._max_retries
         GLib.timeout_add(settings.get('update_time_ms'), self._update)  # pause in ms before the next request
 
     def _update(self):
         with self._dbusservice as s:
-
             try:
-                logging.info("start update")
+                logger.info("start update")
                 meter_data = self._data_connector.getData()
-                logging.info("end update")
+                logger.info("end update")
 
                 for k, v in meter_data.items():
-                    logging.info(f"set {k} to {v}")
+                    logger.info(f"set {k} to {v}")
                     s[k] = v
 
                 # increment UpdateIndex - to show that new data is available (and wrap)
@@ -87,14 +92,26 @@ class DbusSun2000Service:
                 # update lastupdate vars
                 self._lastUpdate = time.time()
 
+                # increment retry counter if not already at max
+                if self._retries < self._max_retries:
+                    self._retries += 1
+
             except Exception as e:
-                logging.critical('Error at %s', '_update', exc_info=e)
-                self.mainloop.quit()
+                logger.critical('Error at %s', '_update', exc_info=e)
+
+                # decrement retry counter
+                self._retries -= 1
+                
+                # if retries exceeded, exit
+                if self._retries <= 0:
+                    logger.error("Retries exceeded, exiting")
+                    self.mainloop.quit()
+                    sys.exit(1)
 
         return True
 
     def _handlechangedvalue(self, path, value):
-        logging.debug("someone else updated %s to %s" % (path, value))
+        logger.debug("someone else updated %s to %s" % (path, value))
         return True  # accept the change
 
 def exit_mainloop(mainloop):
@@ -103,63 +120,58 @@ def exit_mainloop(mainloop):
 def main():
     if len(sys.argv) > 1:
         comport = sys.argv[1]
-        logging.info(f"Using port {comport}")
+        logger.info(f"Using port {comport}")
     else:
-        raise Exception("Please provide the comport as argument")
-
-    # FIXME: This should be a proper private logger, instead of trying to configure the root logger,
-    # which doesn't work unless force=True is specified and then leads to all sorts of libraries
-    # logging lots of debug data
-    logging.basicConfig(format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
-                        datefmt='%Y-%m-%d %H:%M:%S',
-                        level=config.LOGGING,
-                        handlers=[
-                            logging.StreamHandler()
-                        ])
+        logger.error("Please provide the comport as argument")
+        sys.exit(1)
 
     # Have a mainloop, so we can send/receive asynchronous calls to and from dbus
     DBusGMainLoop(set_as_default=True)
 
     settings = HuaweiSUN2000Settings()
-    logging.info(f"VRM pvinverter instance: {settings.get_vrm_instance()}")
-    logging.info(f"Settings: ModbusHost '{settings.get('modbus_host')}', ModbusPort '{settings.get('modbus_port')}', ModbusUnit '{settings.get('modbus_unit')}'")
-    logging.info(f"Settings: CustomName '{settings.get('custom_name')}', Position '{settings.get('position')}', UpdateTimeMS '{settings.get('update_time_ms')}'")
-    logging.info(f"Settings: PowerCorrectionFactor '{settings.get('power_correction_factor')}'")
+    logger.info(f"VRM pvinverter instance: {settings.get_vrm_instance()}")
+    logger.info(f"Settings: ModbusHost '{settings.get('modbus_host')}', ModbusPort '{settings.get('modbus_port')}', ModbusUnit '{settings.get('modbus_unit')}'")
+    logger.info(f"Settings: CustomName '{settings.get('custom_name')}', Position '{settings.get('position')}', UpdateTimeMS '{settings.get('update_time_ms')}'")
+    logger.info(f"Settings: PowerCorrectionFactor '{settings.get('power_correction_factor')}'")
 
 
     #while "255" in settings.get("modbus_host"):
         # This catches the initial setting and allows the service to be installed without configuring it first
-    #    logging.warning(f"Please configure the modbus host and other settings in the VenusOS GUI (current setting: {settings.get('modbus_host')})")
+    #    logger.warning(f"Please configure the modbus host and other settings in the VenusOS GUI (current setting: {settings.get('modbus_host')})")
         # Running a mainloop means we'll be notified about config changes and exit in that case (which restarts the service)
     #    mainloop = GLib.MainLoop()
     #    mainloop.run()
 
-    modbus = ModbusDataCollector2000Delux(host = comport,
+    try:
+        modbus = ModbusDataCollector2000Delux(host = comport,
                                           port=settings.get("modbus_port"),
                                           modbus_unit=settings.get("modbus_unit"),
                                           power_correction_factor=settings.get("power_correction_factor"))
+    except Exception as e:
+        logger.critical('Error at %s', 'main', exc_info=e)
+        sys.exit(1)
 
-    retries = 0
+    retries = 2
     while True:
         staticdata = modbus.getStaticData()
         if staticdata is None:
-            logging.error(f"Didn't receive static data from modbus, error is above. Sleeping 2 seconds before retrying.")
-            
+            logger.error(f"Didn't receive static data from modbus, error is above. Sleeping 1 second before retrying.")
+
             if retries > 0:
                 retries -= 1
             else:
-                raise Exception("Failed to get static data from modbus")
-            
-            # Again we sleep in the mainloop in order to pick up config changes
-            mainloop = GLib.MainLoop()
-            GLib.timeout_add(2000, exit_mainloop, mainloop)
-            mainloop.run()
+                logger.error("Retries exceeded, exiting")
+                sys.exit(1)
+
+            time.sleep(1)
+
             continue
         else:
             break
 
+    mainloop = GLib.MainLoop()
     try:
-        logging.info("Starting up");
+        logger.info("Starting up");
 
         # formatting
         _kwh = lambda p, v: (str(round(v, 2)) + ' kWh')
@@ -198,7 +210,6 @@ def main():
             '/Status': {'initial': ""},
         }
 
-        mainloop = GLib.MainLoop()
         pvac_output = DbusSun2000Service(
             mainloop=mainloop,
             servicename='com.victronenergy.pvinverter.sun2000',
@@ -209,12 +220,12 @@ def main():
             data_connector=modbus
         )
 
-        logging.info('Connected to dbus, and switching over to GLib.MainLoop() (= event based)')
+        logger.info('Connected to dbus, and switching over to GLib.MainLoop() (= event based)')
         mainloop.run()
     except Exception as e:
-        logging.critical('Error at %s', 'main', exc_info=e)
-
-    logging.info('Exiting main')
+        logger.critical('Error at %s', 'main', exc_info=e)
+        #mainloop.quit()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

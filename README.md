@@ -54,7 +54,7 @@ I assume that newer series of Huawei Sun 2000 use a different register mapping. 
 
    ```
    /opt/victronenergy/serial-starter/stop-tty.sh /dev/ttyUSB0
-   python /data/dbus-huaweisun2000-pvinverter/dbus-huaweisun2000-pvinverter.py
+   python /data/dbus-huaweisun2000-pvinverter/dbus-huaweisun2000-pvinverter.py /dev/ttyUSB0
    ```
 
    To enable the serial port again, run:
@@ -76,6 +76,10 @@ If you have problems with the script, first try to run it standalone as describe
 If the service is started, you can check the log file:
 
 `tail -F -n 100 /data/log/dbus-huaweisun2000.ttyUSB*/current | tai64nlocal`
+
+If the service is not started, you can check the service binding of serial-starter:
+
+`head /data/var/lib/serial-starter/*`
 
 ## Uninstall the script
 
