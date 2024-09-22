@@ -17,6 +17,8 @@ import sys
 import time
 import os
 import config
+import signal
+import faulthandler
 from dbus.mainloop.glib import DBusGMainLoop
 from connector_modbus import ModbusDataCollector2000Delux
 from settings import HuaweiSUN2000Settings
@@ -34,6 +36,7 @@ class DbusSun2000Service:
     def __init__(self, mainloop, servicename, settings, paths, data_connector, serialnumber='X',
                  productname='Huawei Sun2000 PV-Inverter'):
         self.mainloop = mainloop
+        self.servicename = servicename
         self._dbusservice = VeDbusService(servicename)
         # self._paths = paths
         self._data_connector = data_connector
@@ -78,7 +81,7 @@ class DbusSun2000Service:
     def _update(self):
         with self._dbusservice as s:
             try:
-                logger.info("start update")
+                logger.info(f"start update @{self.servicename}")
                 meter_data = self._data_connector.getData()
                 logger.info("end update")
 
@@ -106,7 +109,7 @@ class DbusSun2000Service:
                 if self._retries <= 0:
                     logger.error("Retries exceeded, exiting")
                     self.mainloop.quit()
-                    sys.exit(1)
+                    os._exit(1)
 
         return True
 
@@ -118,12 +121,16 @@ def exit_mainloop(mainloop):
     mainloop.quit()
 
 def main():
+    signal.signal(signal.SIGINT, lambda s, f: os._exit(1))
+    faulthandler.register(signal.SIGUSR1)
+    faulthandler.enable()
+
     if len(sys.argv) > 1:
         comport = sys.argv[1]
         logger.info(f"Using port {comport}")
     else:
         logger.error("Please provide the comport as argument")
-        sys.exit(1)
+        os._exit(1)
 
     # Have a mainloop, so we can send/receive asynchronous calls to and from dbus
     DBusGMainLoop(set_as_default=True)
@@ -149,7 +156,7 @@ def main():
                                           power_correction_factor=settings.get("power_correction_factor"))
     except Exception as e:
         logger.critical('Error at %s', 'main', exc_info=e)
-        sys.exit(1)
+        os._exit(1)
 
     retries = 2
     while True:
@@ -161,7 +168,7 @@ def main():
                 retries -= 1
             else:
                 logger.error("Retries exceeded, exiting")
-                sys.exit(1)
+                os._exit(1)
 
             time.sleep(1)
 
@@ -212,7 +219,7 @@ def main():
 
         pvac_output = DbusSun2000Service(
             mainloop=mainloop,
-            servicename='com.victronenergy.pvinverter.sun2000',
+            servicename='com.victronenergy.pvinverter.sun2000' + comport[comport.rfind("/") + 1 :],
             settings=settings,
             paths=dbuspath,
             productname=staticdata['Model'],
@@ -225,7 +232,7 @@ def main():
     except Exception as e:
         logger.critical('Error at %s', 'main', exc_info=e)
         #mainloop.quit()
-        sys.exit(1)
+        os._exit(1)
 
 if __name__ == "__main__":
     main()

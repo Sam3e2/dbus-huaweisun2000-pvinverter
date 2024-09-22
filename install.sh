@@ -22,8 +22,8 @@ chmod a+x $SCRIPT_DIR/start.sh
 chmod 755 $SCRIPT_DIR/start.sh
 
 # create sym-link for serial starter
-ln -sn $SCRIPT_DIR /opt/victronenergy/dbus-huaweisun2000-pvinverter
-ln -sn $SCRIPT_DIR/service /opt/victronenergy/service-templates/dbus-huaweisun2000-pvinverter
+cp -rf $SCRIPT_DIR /opt/victronenergy/
+cp -rf $SCRIPT_DIR/service /opt/victronenergy/service-templates/dbus-huaweisun2000-pvinverter
 
 # add service to serial-starter
 # check if serial-starter.d was deleted
@@ -36,13 +36,13 @@ if [ ! -d "$serialstarter_path" ]; then
 fi
 
 # check if file exists
-if [ ! -f "$serialstarter_file" ]; then
-    {
-        echo "service pvinvsun dbus-huaweisun2000-pvinverter"
-        echo "alias default gps:vedirect:pvinvsun"
-        echo "alias rs485 cgwacs:fzsonick:imt:modbus:sbattery:pvinvsun"
-    } > "$serialstarter_file"
-fi
+#if [ ! -f "$serialstarter_file" ]; then
+#    {
+#        echo "service pvinvsun dbus-huaweisun2000-pvinverter"
+#        echo "alias default gps:vedirect:pvinvsun"
+#        echo "alias rs485 cgwacs:fzsonick:imt:modbus:sbattery:pvinvsun"
+#    } > "$serialstarter_file"
+#fi
 
 # add install-script to rc.local to be ready for firmware update
 filename=/data/rc.local
