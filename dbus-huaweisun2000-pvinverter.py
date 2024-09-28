@@ -174,6 +174,7 @@ def main():
 
             continue
         else:
+            logger.info(f"Received static data from modbus: {staticdata}")
             break
 
     mainloop = GLib.MainLoop()

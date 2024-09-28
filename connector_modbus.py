@@ -113,6 +113,8 @@ class ModbusDataCollector2000Delux:
         try:
             data = {}
             data['SN'] = self.invSun2000.read(registers.InverterEquipmentRegister.SN)
+            if (data['SN'] == ''):  # if SN is empty, it means that the inverter is not connected
+                return None
 
             # check if registers has modelID attribute
             if hasattr(registers.InverterEquipmentRegister, 'ModelID'):
